@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pong Game</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --board: #111827;
+      --line: #e2e8f0;
+      --paddle: #f8fafc;
+      --ball: #fbbf24;
+      --text: #f8fafc;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      display: grid;
+      place-items: center;
+      min-height: 100vh;
+      background: radial-gradient(circle at top, #1e293b, var(--bg));
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--text);
+    }
+
+    .game-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .scoreboard {
+      width: 800px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+    }
+
+    canvas {
+      display: block;
+      background: var(--board);
+      border: 3px solid var(--line);
+      border-radius: 10px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    }
+  </style>
+</head>
+<body>
+  <div class="game-wrap">
+    <div class="scoreboard">
+      <div>Player: <span id="playerScore">0</span></div>
+      <div>CPU: <span id="cpuScore">0</span></div>
+    </div>
+
+    <canvas id="gameCanvas" width="800" height="480"></canvas>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const playerScoreEl = document.getElementById("playerScore");
+    const cpuScoreEl = document.getElementById("cpuScore");
+
+    const paddleWidth = 12;
+    const paddleHeight = 90;
+    const paddleSpeed = 7;
+    const ballRadius = 8;
+
+    const leftPaddle = {
+      x: 20,
+      y: canvas.height / 2 - paddleHeight / 2,
+      width: paddleWidth,
+      height: paddleHeight
+    };
+
+    const rightPaddle = {
+      x: canvas.width - 20 - paddleWidth,
+      y: canvas.height / 2 - paddleHeight / 2,
+      width: paddleWidth,
+      height: paddleHeight
+    };
+
+    let ball = {
+      x: canvas.width / 2,
+      y: canvas.height / 2,
+      radius: ballRadius,
+      vx: 5,
+      vy: 3
+    };
+
+    const keys = {
+      ArrowUp: false,
+      ArrowDown: false
+    };
+
+    let scores = { player: 0, cpu: 0 };
+
+    function resetBall(direction) {
+      ball.x = canvas.width / 2;
+      ball.y = canvas.height / 2;
+      const speed = 5;
+      const angle = (Math.random() * 1.4 - 0.7); // random between -0.7 and 0.7 radians
+
+      ball.vx = direction * speed * Math.cos(angle);
+      ball.vy = speed * Math.sin(angle);
+    }
+
+    function clamp(value, min, max) {
+      return Math.min(Math.max(value, min), max);
+    }
+
+    function updatePaddleMovement() {
+      if (keys.ArrowUp) leftPaddle.y -= paddleSpeed;
+      if (keys.ArrowDown) leftPaddle.y += paddleSpeed;
+
+      leftPaddle.y = clamp(leftPaddle.y, 0, canvas.height - leftPaddle.height);
+    }
+
+    function updateComputer() {
+      const targetY = ball.y - rightPaddle.height / 2;
+      const moveAmount = (targetY - rightPaddle.y) * 0.08;
+      rightPaddle.y += moveAmount;
+      rightPaddle.y = clamp(rightPaddle.y, 0, canvas.height - rightPaddle.height);
+    }
+
+    function handleWallCollision() {
+      if (ball.y - ball.radius <= 0) {
+        ball.y = ball.radius;
+        ball.vy *= -1;
+      }
+      if (ball.y + ball.radius >= canvas.height) {
+        ball.y = canvas.height - ball.radius;
+        ball.vy *= -1;
+      }
+    }
+
+    function handlePaddleCollision() {
+      // Left paddle collision
+      if (
+        ball.x - ball.radius <= leftPaddle.x + leftPaddle.width &&
+        ball.x - ball.radius >= leftPaddle.x &&
+        ball.y >= leftPaddle.y &&
+        ball.y <= leftPaddle.y + leftPaddle.height &&
+        ball.vx < 0
+      ) {
+        const offset = (ball.y - (leftPaddle.y + leftPaddle.height / 2)) / (leftPaddle.height / 2);
+        const angle = offset * (Math.PI / 3);
+        const speed = Math.min(Math.hypot(ball.vx, ball.vy) + 0.5, 11);
+
+        ball.x = leftPaddle.x + leftPaddle.width + ball.radius;
+        ball.vx = Math.abs(Math.cos(angle) * speed);
+        ball.vy = Math.sin(angle) * speed;
+      }
+
+      // Right paddle collision
+      if (
+        ball.x + ball.radius >= rightPaddle.x &&
+        ball.x - ball.radius <= rightPaddle.x + rightPaddle.width &&
+        ball.y >= rightPaddle.y &&
+        ball.y <= rightPaddle.y + rightPaddle.height &&
+        ball.vx > 0
+      ) {
+        const offset = (ball.y - (rightPaddle.y + rightPaddle.height / 2)) / (rightPaddle.height / 2);
+        const angle = offset * (Math.PI / 3);
+        const speed = Math.min(Math.hypot(ball.vx, ball.vy) + 0.5, 11);
+
+        ball.x = rightPaddle.x - ball.radius;
+        ball.vx = -Math.abs(Math.cos(angle) * speed);
+        ball.vy = Math.sin(angle) * speed;
+      }
+    }
+
+    function updateScore() {
+      playerScoreEl.textContent = scores.player;
+      cpuScoreEl.textContent = scores.cpu;
+    }
+
+    function updateBall() {
+      ball.x += ball.vx;
+      ball.y += ball.vy;
+
+      handleWallCollision();
+      handlePaddleCollision();
+
+      if (ball.x + ball.radius < 0) {
+        scores.cpu += 1;
+        updateScore();
+        resetBall(1);
+      }
+
+      if (ball.x - ball.radius > canvas.width) {
+        scores.player += 1;
+        updateScore();
+        resetBall(-1);
+      }
+    }
+
+    function drawBoard() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Middle dashed line
+      ctx.setLineDash([12, 12]);
+      ctx.beginPath();
+      ctx.moveTo(canvas.width / 2, 0);
+      ctx.lineTo(canvas.width / 2, canvas.height);
+      ctx.strokeStyle = "#e2e8f0";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Paddles
+      ctx.fillStyle = "#f8fafc";
+      ctx.fillRect(leftPaddle.x, leftPaddle.y, leftPaddle.width, leftPaddle.height);
+      ctx.fillRect(rightPaddle.x, rightPaddle.y, rightPaddle.width, rightPaddle.height);
+
+      // Ball
+      ctx.beginPath();
+      ctx.fillStyle = "#fbbf24";
+      ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function gameLoop() {
+      updatePaddleMovement();
+      updateComputer();
+      updateBall();
+      drawBoard();
+      requestAnimationFrame(gameLoop);
+    }
+
+    // Mouse controls for left paddle
+    canvas.addEventListener("mousemove", (event) => {
+      const rect = canvas.getBoundingClientRect();
+      const mouseY = event.clientY - rect.top;
+      leftPaddle.y = mouseY - leftPaddle.height / 2;
+      leftPaddle.y = clamp(leftPaddle.y, 0, canvas.height - leftPaddle.height);
+    });
+
+    // Keyboard controls for left paddle
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+        keys[event.key] = true;
+      }
+    });
+
+    document.addEventListener("keyup", (event) => {
+      if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+        keys[event.key] = false;
+      }
+    });
+
+    resetBall(1);
+    updateScore();
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>
